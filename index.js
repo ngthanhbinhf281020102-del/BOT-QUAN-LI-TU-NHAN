@@ -294,44 +294,76 @@ async function restoreRoles(member) {
 
         });
 
-    if (validRoles.length > 0) {
-
-        try {
-
-            await member.roles.add(
-                validRoles,
-                "TB ManagerBot: khôi phục role sau khi hết Tù"
-            );
-
-            console.log(
-                `♻️ Đã khôi phục ${validRoles.length} role cho ${member.user.tag}.`
-            );
-
-        } catch (error) {
-
-            console.error(
-                "❌ Lỗi khôi phục role:",
-                error.message
-            );
-
-        }
-
-    } else {
+    if (validRoles.length === 0) {
 
         console.log(
-            `ℹ️ Không có role hợp lệ để khôi phục cho ${member.user.tag}.`
+            `⚠️ Không có role hợp lệ để khôi phục cho ${member.user.tag}.`
         );
 
+        return;
     }
 
-    db.prepare(`
-        DELETE FROM saved_roles
-        WHERE guild_id = ?
-        AND user_id = ?
-    `).run(
-        member.guild.id,
-        member.id
-    );
+    try {
+
+        await member.roles.add(
+            validRoles,
+            "TB ManagerBot: khôi phục role sau khi hết Tù"
+        );
+
+        console.log(
+            `♻️ Đã khôi phục ${validRoles.length} role cho ${member.user.tag}.`
+        );
+
+        // Chỉ xóa dữ liệu SAU KHI thêm role thành công
+        db.prepare(`
+            DELETE FROM saved_roles
+            WHERE guild_id = ?
+            AND user_id = ?
+        `).run(
+            member.guild.id,
+            member.id
+        );
+
+        console.log(
+            `🗑️ Đã xóa dữ liệu role đã lưu của ${member.user.tag}.`
+        );
+
+    } catch (error) {
+
+        console.error(
+            "❌ Lỗi khôi phục role:",
+            error.message
+        );
+
+        // Giữ nguyên dữ liệu để thử khôi phục lại
+        console.log(
+            "💾 Dữ liệu role vẫn được giữ lại."
+        );
+    }
+}
+
+// ================================
+// KIỂM TRA ĐÃ THÔNG BÁO TÙ CHƯA
+// ================================
+
+function markJailNotification(member) {
+
+    const result =
+        db.prepare(`
+            INSERT OR IGNORE INTO jail_notifications
+            (
+                guild_id,
+                user_id,
+                created_at
+            )
+            VALUES (?, ?, ?)
+        `).run(
+            member.guild.id,
+            member.id,
+            Date.now()
+        );
+
+    return result.changes === 1;
 }
 
 // ================================
