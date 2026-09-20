@@ -1,0 +1,14 @@
+{
+  "name": "tb-managerbot",
+  "version": "1.0.0",
+  "description": "TB ManagerBot - Voice 24/7 + quản lý role Tù",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.0",
+    "better-sqlite3": "^11.7.0",
+    "discord.js": "^14.24.2"
+  }
+}
