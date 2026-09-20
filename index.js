@@ -43,6 +43,8 @@ const db = new Database("roles.db");
 
 db.pragma("journal_mode = WAL");
 
+console.log("✅ SQLite database đã sẵn sàng.");
+
 // ================================
 // BẢNG LƯU ROLE
 // ================================
@@ -70,8 +72,6 @@ CREATE TABLE IF NOT EXISTS jail_notifications (
 )
 `).run();
 
-console.log("✅ SQLite database đã sẵn sàng.");
-
 // ================================
 // DISCORD CLIENT
 // ================================
@@ -97,9 +97,11 @@ function joinRoom() {
         client.guilds.cache.get(GUILD_ID);
 
     if (!guild) {
+
         console.log(
             "❌ Không tìm thấy server."
         );
+
         return;
     }
 
@@ -107,23 +109,29 @@ function joinRoom() {
         guild.channels.cache.get(CHANNEL_ID);
 
     if (!channel) {
+
         console.log(
             "❌ Không tìm thấy phòng thoại."
         );
+
         return;
     }
 
     if (!channel.isVoiceBased()) {
+
         console.log(
             "❌ CHANNEL_ID không phải phòng thoại."
         );
+
         return;
     }
 
     if (connection) {
 
         try {
+
             connection.destroy();
+
         } catch {}
 
         connection = null;
@@ -161,21 +169,26 @@ function joinRoom() {
             );
 
             if (reconnectTimer) {
-                clearTimeout(reconnectTimer);
+
+                clearTimeout(
+                    reconnectTimer
+                );
+
             }
 
-            reconnectTimer = setTimeout(
-                () => {
+            reconnectTimer =
+                setTimeout(
+                    () => {
 
-                    console.log(
-                        "🔄 Đang kết nối lại voice..."
-                    );
+                        console.log(
+                            "🔄 Đang kết nối lại voice..."
+                        );
 
-                    joinRoom();
+                        joinRoom();
 
-                },
-                5000
-            );
+                    },
+                    5000
+                );
 
         }
     );
@@ -189,11 +202,15 @@ function saveRoles(member) {
 
     const roles =
         member.roles.cache
-            .filter(role =>
-                role.id !== member.guild.id &&
-                !role.managed
+            .filter(
+                role =>
+                    role.id !== member.guild.id &&
+                    !role.managed
             )
-            .map(role => role.id);
+            .map(
+                role =>
+                    role.id
+            );
 
     db.prepare(`
         INSERT INTO saved_roles
@@ -252,7 +269,9 @@ async function restoreRoles(member) {
     try {
 
         roleIds =
-            JSON.parse(row.role_ids);
+            JSON.parse(
+                row.role_ids
+            );
 
     } catch {
 
@@ -279,22 +298,26 @@ async function restoreRoles(member) {
         botMember.roles.highest.position;
 
     const validRoles =
-        roleIds.filter(roleId => {
+        roleIds.filter(
+            roleId => {
 
-            const role =
-                member.guild.roles.cache.get(
-                    roleId
+                const role =
+                    member.guild.roles.cache.get(
+                        roleId
+                    );
+
+                return (
+                    role &&
+                    !role.managed &&
+                    role.position < botPosition
                 );
 
-            return (
-                role &&
-                !role.managed &&
-                role.position < botPosition
-            );
+            }
+        );
 
-        });
-
-    if (validRoles.length === 0) {
+    if (
+        validRoles.length === 0
+    ) {
 
         console.log(
             `⚠️ Không có role hợp lệ để khôi phục cho ${member.user.tag}.`
@@ -314,7 +337,6 @@ async function restoreRoles(member) {
             `♻️ Đã khôi phục ${validRoles.length} role cho ${member.user.tag}.`
         );
 
-        // Chỉ xóa dữ liệu SAU KHI thêm role thành công
         db.prepare(`
             DELETE FROM saved_roles
             WHERE guild_id = ?
@@ -335,35 +357,10 @@ async function restoreRoles(member) {
             error.message
         );
 
-        // Giữ nguyên dữ liệu để thử khôi phục lại
         console.log(
             "💾 Dữ liệu role vẫn được giữ lại."
         );
     }
-}
-
-// ================================
-// KIỂM TRA ĐÃ THÔNG BÁO TÙ CHƯA
-// ================================
-
-function markJailNotification(member) {
-
-    const result =
-        db.prepare(`
-            INSERT OR IGNORE INTO jail_notifications
-            (
-                guild_id,
-                user_id,
-                created_at
-            )
-            VALUES (?, ?, ?)
-        `).run(
-            member.guild.id,
-            member.id,
-            Date.now()
-        );
-
-    return result.changes === 1;
 }
 
 // ================================
@@ -406,19 +403,16 @@ function clearJailNotification(member) {
     );
 
 }
-
 // ================================
 // THÔNG BÁO VÀO TÙ
 // ================================
 
 async function sendJailNotification(member) {
 
-    // =================================
-    // CHỐNG ĐÚP BẰNG SQLITE
-    // =================================
-
     const shouldNotify =
-        markJailNotification(member);
+        markJailNotification(
+            member
+        );
 
     if (!shouldNotify) {
 
@@ -440,8 +434,9 @@ async function sendJailNotification(member) {
             "❌ Không tìm thấy kênh thông báo Tù."
         );
 
-        // Cho phép gửi lại nếu kênh bị lỗi
-        clearJailNotification(member);
+        clearJailNotification(
+            member
+        );
 
         return;
     }
@@ -452,8 +447,9 @@ async function sendJailNotification(member) {
             "❌ JAIL_LOG_CHANNEL_ID không phải kênh văn bản."
         );
 
-        // Cho phép gửi lại nếu cấu hình sai
-        clearJailNotification(member);
+        clearJailNotification(
+            member
+        );
 
         return;
     }
@@ -484,9 +480,9 @@ async function sendJailNotification(member) {
             error.message
         );
 
-        // Nếu gửi thất bại
-        // cho phép lần sau gửi lại
-        clearJailNotification(member);
+        clearJailNotification(
+            member
+        );
     }
 }
 
@@ -496,7 +492,10 @@ async function sendJailNotification(member) {
 
 client.on(
     "guildMemberUpdate",
-    async (oldMember, newMember) => {
+    async (
+        oldMember,
+        newMember
+    ) => {
 
         const oldJail =
             oldMember.roles.cache.has(
@@ -507,6 +506,10 @@ client.on(
             newMember.roles.cache.has(
                 JAIL_ROLE_ID
             );
+
+        console.log(
+            `🔎 guildMemberUpdate | PID=${process.pid} | ${newMember.user.tag} | oldJail=${oldJail} | newJail=${newJail}`
+        );
 
         // ==========================
         // VÀO TÙ
@@ -525,7 +528,13 @@ client.on(
             // LƯU ROLE CŨ
             // ==========================
 
-            saveRoles(oldMember);
+            saveRoles(
+                oldMember
+            );
+
+            // ==========================
+            // LẤY BOT MEMBER
+            // ==========================
 
             const botMember =
                 newMember.guild.members.me;
@@ -539,8 +548,16 @@ client.on(
                 return;
             }
 
+            // ==========================
+            // VỊ TRÍ ROLE BOT
+            // ==========================
+
             const botPosition =
                 botMember.roles.highest.position;
+
+            // ==========================
+            // TÌM ROLE CẦN XÓA
+            // ==========================
 
             const rolesToRemove =
                 newMember.roles.cache.filter(
@@ -576,7 +593,6 @@ client.on(
                         "❌ Lỗi xóa role:",
                         error.message
                     );
-
                 }
             }
 
@@ -603,7 +619,7 @@ client.on(
             );
 
             // ==========================
-            // RESET CHỐNG ĐÚP
+            // RESET CHỐNG TRÙNG
             // ==========================
 
             clearJailNotification(
@@ -665,12 +681,16 @@ client.once(
             "================================"
         );
 
+        // ==========================
+        // TỰ VÀO VOICE
+        // ==========================
+
         joinRoom();
     }
 );
 
 // ================================
-// ERROR
+// DISCORD ERROR
 // ================================
 
 client.on(
@@ -685,6 +705,10 @@ client.on(
     }
 );
 
+// ================================
+// UNHANDLED REJECTION
+// ================================
+
 process.on(
     "unhandledRejection",
     error => {
@@ -696,6 +720,10 @@ process.on(
 
     }
 );
+
+// ================================
+// UNCAUGHT EXCEPTION
+// ================================
 
 process.on(
     "uncaughtException",
@@ -713,4 +741,6 @@ process.on(
 // LOGIN
 // ================================
 
-client.login(TOKEN);
+client.login(
+    TOKEN
+);
