@@ -45,7 +45,9 @@ function joinRoom() {
     if (!channel.isVoiceBased()) return console.log("❌ CHANNEL_ID không phải phòng thoại.");
 
     if (connection) {
-        try { connection.destroy(); } catch {}
+        try {
+            connection.destroy();
+        } catch {}
         connection = null;
     }
 
@@ -119,6 +121,7 @@ async function restoreRoles(member) {
 
     const validRoles = roleIds.filter(roleId => {
         const role = member.guild.roles.cache.get(roleId);
+
         return role &&
             !role.managed &&
             role.position < botPosition;
@@ -144,7 +147,6 @@ async function restoreRoles(member) {
         WHERE guild_id = ? AND user_id = ?
     `).run(member.guild.id, member.id);
 }
-
 async function sendJailNotification(member) {
     const channel = member.guild.channels.cache.get(JAIL_LOG_CHANNEL_ID);
 
