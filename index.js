@@ -511,4 +511,102 @@ client.on(
         ) {
 
             console.log(
-                `
+                `🔓 ${newMember.user.tag} đã hết Tù.`
+            );
+
+            await restoreRoles(
+                newMember
+            );
+        }
+    }
+);
+
+// ================================
+// BOT ONLINE
+// ================================
+
+client.once(
+    "ready",
+    () => {
+
+        console.log(
+            "================================"
+        );
+
+        console.log(
+            `🤖 Bot: ${client.user.tag}`
+        );
+
+        console.log(
+            "🤖 TB ManagerBot đã online."
+        );
+
+        console.log(
+            `🏠 GUILD_ID: ${GUILD_ID}`
+        );
+
+        console.log(
+            `🎧 CHANNEL_ID: ${CHANNEL_ID}`
+        );
+
+        console.log(
+            `🔒 JAIL_ROLE_ID: ${JAIL_ROLE_ID}`
+        );
+
+        console.log(
+            `📢 JAIL_LOG_CHANNEL_ID: ${JAIL_LOG_CHANNEL_ID}`
+        );
+
+        console.log(
+            "================================"
+        );
+
+        joinRoom();
+    }
+);
+
+// ================================
+// ERROR
+// ================================
+
+client.on(
+    "error",
+    error => {
+
+        console.error(
+            "❌ Discord Error:",
+            error
+        );
+
+    }
+);
+
+process.on(
+    "unhandledRejection",
+    error => {
+
+        console.error(
+            "❌ Unhandled Rejection:",
+            error
+        );
+
+    }
+);
+
+process.on(
+    "uncaughtException",
+    error => {
+
+        console.error(
+            "❌ Uncaught Exception:",
+            error
+        );
+
+    }
+);
+
+// ================================
+// LOGIN
+// ================================
+
+client.login(TOKEN);
