@@ -43,11 +43,28 @@ const db = new Database("roles.db");
 
 db.pragma("journal_mode = WAL");
 
+// ================================
+// BẢNG LƯU ROLE
+// ================================
+
 db.prepare(`
 CREATE TABLE IF NOT EXISTS saved_roles (
     guild_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     role_ids TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+)
+`).run();
+
+// ================================
+// BẢNG CHỐNG THÔNG BÁO TÙ TRÙNG
+// ================================
+
+db.prepare(`
+CREATE TABLE IF NOT EXISTS jail_notifications (
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     PRIMARY KEY (guild_id, user_id)
 )
@@ -318,11 +335,45 @@ async function restoreRoles(member) {
 }
 
 // ================================
-// CHỐNG THÔNG BÁO TÙ TRÙNG
+// KIỂM TRA ĐÃ THÔNG BÁO TÙ CHƯA
 // ================================
 
-const jailNotificationCooldown =
-    new Set();
+function markJailNotification(member) {
+
+    const result =
+        db.prepare(`
+            INSERT OR IGNORE INTO jail_notifications
+            (
+                guild_id,
+                user_id,
+                created_at
+            )
+            VALUES (?, ?, ?)
+        `).run(
+            member.guild.id,
+            member.id,
+            Date.now()
+        );
+
+    return result.changes === 1;
+}
+
+// ================================
+// XÓA TRẠNG THÁI THÔNG BÁO TÙ
+// ================================
+
+function clearJailNotification(member) {
+
+    db.prepare(`
+        DELETE FROM jail_notifications
+        WHERE guild_id = ?
+        AND user_id = ?
+    `).run(
+        member.guild.id,
+        member.id
+    );
+
+}
 
 // ================================
 // THÔNG BÁO VÀO TÙ
@@ -330,13 +381,14 @@ const jailNotificationCooldown =
 
 async function sendJailNotification(member) {
 
-    // Nếu người này vừa được thông báo
-    // thì bỏ qua thông báo trùng trong 2 giây
-    if (
-        jailNotificationCooldown.has(
-            member.id
-        )
-    ) {
+    // =================================
+    // CHỐNG ĐÚP BẰNG SQLITE
+    // =================================
+
+    const shouldNotify =
+        markJailNotification(member);
+
+    if (!shouldNotify) {
 
         console.log(
             `⚠️ Bỏ qua thông báo Tù trùng cho ${member.user.tag}.`
@@ -344,21 +396,6 @@ async function sendJailNotification(member) {
 
         return;
     }
-
-    jailNotificationCooldown.add(
-        member.id
-    );
-
-    setTimeout(
-        () => {
-
-            jailNotificationCooldown.delete(
-                member.id
-            );
-
-        },
-        2000
-    );
 
     const channel =
         member.guild.channels.cache.get(
@@ -371,6 +408,9 @@ async function sendJailNotification(member) {
             "❌ Không tìm thấy kênh thông báo Tù."
         );
 
+        // Cho phép gửi lại nếu kênh bị lỗi
+        clearJailNotification(member);
+
         return;
     }
 
@@ -379,6 +419,9 @@ async function sendJailNotification(member) {
         console.log(
             "❌ JAIL_LOG_CHANNEL_ID không phải kênh văn bản."
         );
+
+        // Cho phép gửi lại nếu cấu hình sai
+        clearJailNotification(member);
 
         return;
     }
@@ -409,6 +452,9 @@ async function sendJailNotification(member) {
             error.message
         );
 
+        // Nếu gửi thất bại
+        // cho phép lần sau gửi lại
+        clearJailNotification(member);
     }
 }
 
@@ -443,7 +489,10 @@ client.on(
                 `🔒 ${newMember.user.tag} đã vào Tù.`
             );
 
-            // Lưu role cũ
+            // ==========================
+            // LƯU ROLE CŨ
+            // ==========================
+
             saveRoles(oldMember);
 
             const botMember =
@@ -470,6 +519,10 @@ client.on(
                         role.position < botPosition
                 );
 
+            // ==========================
+            // XÓA ROLE CŨ
+            // ==========================
+
             if (
                 rolesToRemove.size > 0
             ) {
@@ -495,7 +548,10 @@ client.on(
                 }
             }
 
-            // Gửi thông báo
+            // ==========================
+            // GỬI THÔNG BÁO
+            // ==========================
+
             await sendJailNotification(
                 newMember
             );
@@ -513,6 +569,18 @@ client.on(
             console.log(
                 `🔓 ${newMember.user.tag} đã hết Tù.`
             );
+
+            // ==========================
+            // RESET CHỐNG ĐÚP
+            // ==========================
+
+            clearJailNotification(
+                newMember
+            );
+
+            // ==========================
+            // KHÔI PHỤC ROLE
+            // ==========================
 
             await restoreRoles(
                 newMember
@@ -539,6 +607,10 @@ client.once(
 
         console.log(
             "🤖 TB ManagerBot đã online."
+        );
+
+        console.log(
+            `🆔 PID: ${process.pid}`
         );
 
         console.log(
