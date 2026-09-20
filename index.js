@@ -1,6 +1,13 @@
 const { Client, GatewayIntentBits } = require("discord.js");
-const { joinVoiceChannel, VoiceConnectionStatus } = require("@discordjs/voice");
+const {
+    joinVoiceChannel,
+    VoiceConnectionStatus
+} = require("@discordjs/voice");
 const Database = require("better-sqlite3");
+
+// ===============================
+// RAILWAY VARIABLES
+// ===============================
 
 const TOKEN = process.env.TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
@@ -8,12 +15,27 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 const JAIL_ROLE_ID = process.env.JAIL_ROLE_ID;
 const JAIL_LOG_CHANNEL_ID = process.env.JAIL_LOG_CHANNEL_ID;
 
-if (!TOKEN || !GUILD_ID || !CHANNEL_ID || !JAIL_ROLE_ID || !JAIL_LOG_CHANNEL_ID) {
+// ===============================
+// KIỂM TRA VARIABLES
+// ===============================
+
+if (
+    !TOKEN ||
+    !GUILD_ID ||
+    !CHANNEL_ID ||
+    !JAIL_ROLE_ID ||
+    !JAIL_LOG_CHANNEL_ID
+) {
     console.error("❌ Thiếu Railway Variables.");
     process.exit(1);
 }
 
+// ===============================
+// SQLITE
+// ===============================
+
 const db = new Database("roles.db");
+
 db.pragma("journal_mode = WAL");
 
 db.prepare(`
@@ -23,7 +45,15 @@ CREATE TABLE IF NOT EXISTS saved_roles (
     role_ids TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     PRIMARY KEY (guild_id, user_id)
-)`).run();
+)
+`).run();
+
+console.log("✅ SQLite database đã sẵn sàng.");
+
+// ===============================
+// DISCORD CLIENT
+// ===============================
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -32,21 +62,39 @@ const client = new Client({
     ]
 });
 
+// ===============================
+// VOICE
+// ===============================
+
 let connection = null;
 let reconnectTimer = null;
 
 function joinRoom() {
     const guild = client.guilds.cache.get(GUILD_ID);
-    if (!guild) return console.log("❌ Không tìm thấy server.");
+
+    if (!guild) {
+        console.log("❌ Không tìm thấy server.");
+        return;
+    }
 
     const channel = guild.channels.cache.get(CHANNEL_ID);
-    if (!channel) return console.log("❌ Không tìm thấy phòng thoại.");
-    if (!channel.isVoiceBased()) return console.log("❌ CHANNEL_ID không phải phòng thoại.");
 
+    if (!channel) {
+        console.log("❌ Không tìm thấy phòng thoại.");
+        return;
+    }
+
+    if (!channel.isVoiceBased()) {
+        console.log("❌ CHANNEL_ID không phải phòng thoại.");
+        return;
+    }
+
+    // Hủy kết nối cũ nếu có
     if (connection) {
         try {
             connection.destroy();
         } catch {}
+
         connection = null;
     }
 
@@ -67,7 +115,9 @@ function joinRoom() {
     connection.on(VoiceConnectionStatus.Disconnected, () => {
         console.log("⚠️ Mất kết nối voice.");
 
-        if (reconnectTimer) clearTimeout(reconnectTimer);
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+        }
 
         reconnectTimer = setTimeout(() => {
             console.log("🔄 Đang kết nối lại voice...");
@@ -76,19 +126,32 @@ function joinRoom() {
     });
 }
 
+// ===============================
+// LƯU ROLE
+// ===============================
+
 function saveRoles(member) {
     const roles = member.roles.cache
-        .filter(r => r.id !== member.guild.id && !r.managed)
-        .map(r => r.id);
+        .filter(role =>
+            role.id !== member.guild.id &&
+            !role.managed
+        )
+        .map(role => role.id);
 
     db.prepare(`
         INSERT INTO saved_roles
-        (guild_id, user_id, role_ids, created_at)
+        (
+            guild_id,
+            user_id,
+            role_ids,
+            created_at
+        )
         VALUES (?, ?, ?, ?)
+
         ON CONFLICT(guild_id, user_id)
         DO UPDATE SET
-        role_ids = excluded.role_ids,
-        created_at = excluded.created_at
+            role_ids = excluded.role_ids,
+            created_at = excluded.created_at
     `).run(
         member.guild.id,
         member.id,
@@ -96,16 +159,32 @@ function saveRoles(member) {
         Date.now()
     );
 
-    console.log(`💾 Đã lưu ${roles.length} role của ${member.user.tag}.`);
+    console.log(
+        `💾 Đã lưu ${roles.length} role của ${member.user.tag}.`
+    );
 }
+
+// ===============================
+// KHÔI PHỤC ROLE
+// ===============================
 
 async function restoreRoles(member) {
     const row = db.prepare(`
-        SELECT role_ids FROM saved_roles
-        WHERE guild_id = ? AND user_id = ?
-    `).get(member.guild.id, member.id);
+        SELECT role_ids
+        FROM saved_roles
+        WHERE guild_id = ?
+        AND user_id = ?
+    `).get(
+        member.guild.id,
+        member.id
+    );
 
-    if (!row) return;
+    if (!row) {
+        console.log(
+            `ℹ️ Không có role đã lưu cho ${member.user.tag}.`
+        );
+        return;
+    }
 
     let roleIds;
 
@@ -116,17 +195,26 @@ async function restoreRoles(member) {
         return;
     }
 
-    const botPosition = member.guild.members.me.roles.highest.position;
+    const botMember = member.guild.members.me;
+
+    if (!botMember) {
+        console.error("❌ Không lấy được thông tin role của bot.");
+        return;
+    }
+
+    const botPosition = botMember.roles.highest.position;
 
     const validRoles = roleIds.filter(roleId => {
         const role = member.guild.roles.cache.get(roleId);
 
-        return role &&
+        return (
+            role &&
             !role.managed &&
-            role.position < botPosition;
+            role.position < botPosition
+        );
     });
 
-    if (validRoles.length) {
+    if (validRoles.length > 0) {
         try {
             await member.roles.add(
                 validRoles,
@@ -137,20 +225,48 @@ async function restoreRoles(member) {
                 `♻️ Đã khôi phục ${validRoles.length} role cho ${member.user.tag}.`
             );
         } catch (error) {
-            console.error("❌ Lỗi khôi phục role:", error.message);
+            console.error(
+                "❌ Lỗi khôi phục role:",
+                error.message
+            );
         }
+    } else {
+        console.log(
+            `ℹ️ Không có role hợp lệ để khôi phục cho ${member.user.tag}.`
+        );
     }
 
+    // Xóa dữ liệu sau khi xử lý
     db.prepare(`
         DELETE FROM saved_roles
-        WHERE guild_id = ? AND user_id = ?
-    `).run(member.guild.id, member.id);
+        WHERE guild_id = ?
+        AND user_id = ?
+    `).run(
+        member.guild.id,
+        member.id
+    );
 }
+
+// ===============================
+// THÔNG BÁO KHI VÀO TÙ
+// ===============================
+
 async function sendJailNotification(member) {
-    const channel = member.guild.channels.cache.get(JAIL_LOG_CHANNEL_ID);
+    const channel = member.guild.channels.cache.get(
+        JAIL_LOG_CHANNEL_ID
+    );
 
     if (!channel) {
-        console.log("❌ Không tìm thấy kênh thông báo Tù.");
+        console.log(
+            "❌ Không tìm thấy kênh thông báo Tù."
+        );
+        return;
+    }
+
+    if (!channel.isTextBased()) {
+        console.log(
+            "❌ JAIL_LOG_CHANNEL_ID không phải kênh văn bản."
+        );
         return;
     }
 
@@ -168,77 +284,172 @@ async function sendJailNotification(member) {
 ╰┈➤ 🔔 Vui lòng tuân thủ nội quy máy chủ.`
         );
 
-        console.log(`📢 Đã thông báo Tù cho ${member.user.tag}.`);
+        console.log(
+            `📢 Đã thông báo Tù cho ${member.user.tag}.`
+        );
     } catch (error) {
-        console.error("❌ Lỗi gửi thông báo:", error.message);
+        console.error(
+            "❌ Lỗi gửi thông báo:",
+            error.message
+        );
     }
 }
 
-client.on("guildMemberUpdate", async (oldMember, newMember) => {
-    const oldJail = oldMember.roles.cache.has(JAIL_ROLE_ID);
-    const newJail = newMember.roles.cache.has(JAIL_ROLE_ID);
+// ===============================
+// THEO DÕI ROLE TÙ
+// ===============================
 
-    if (!oldJail && newJail) {
-        console.log(`🔒 ${newMember.user.tag} đã vào Tù.`);
+client.on(
+    "guildMemberUpdate",
+    async (oldMember, newMember) => {
 
-        saveRoles(oldMember);
-
-        const botPosition = newMember.guild.members.me.roles.highest.position;
-
-        const rolesToRemove = newMember.roles.cache.filter(role =>
-            role.id !== newMember.guild.id &&
-            role.id !== JAIL_ROLE_ID &&
-            !role.managed &&
-            role.position < botPosition
+        const oldJail = oldMember.roles.cache.has(
+            JAIL_ROLE_ID
         );
 
-        if (rolesToRemove.size) {
-            try {
-                await newMember.roles.remove(
-                    rolesToRemove,
-                    "TB ManagerBot: đưa thành viên vào Tù"
+        const newJail = newMember.roles.cache.has(
+            JAIL_ROLE_ID
+        );
+
+        // ===========================
+        // VÀO TÙ
+        // ===========================
+
+        if (!oldJail && newJail) {
+
+            console.log(
+                `🔒 ${newMember.user.tag} đã vào Tù.`
+            );
+
+            // Lưu role trước khi xóa
+            saveRoles(oldMember);
+
+            const botMember =
+                newMember.guild.members.me;
+
+            if (!botMember) {
+                console.error(
+                    "❌ Không lấy được thông tin role của bot."
+                );
+                return;
+            }
+
+            const botPosition =
+                botMember.roles.highest.position;
+
+            // Lấy các role cần xóa
+            const rolesToRemove =
+                newMember.roles.cache.filter(role =>
+                    role.id !== newMember.guild.id &&
+                    role.id !== JAIL_ROLE_ID &&
+                    !role.managed &&
+                    role.position < botPosition
                 );
 
-                console.log(
-                    `🔒 Đã xóa ${rolesToRemove.size} role của ${newMember.user.tag}.`
-                );
-            } catch (error) {
-                console.error("❌ Lỗi xóa role:", error.message);
+            // Xóa role
+            if (rolesToRemove.size > 0) {
+
+                try {
+
+                    await newMember.roles.remove(
+                        rolesToRemove,
+                        "TB ManagerBot: đưa thành viên vào Tù"
+                    );
+
+                    console.log(
+                        `🔒 Đã xóa ${rolesToRemove.size} role của ${newMember.user.tag}.`
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "❌ Lỗi xóa role:",
+                        error.message
+                    );
+                }
             }
+
+            // Gửi thông báo
+            await sendJailNotification(
+                newMember
+            );
         }
 
-        await sendJailNotification(newMember);
-    }
+        // ===========================
+        // RA TÙ
+        // ===========================
 
-    if (oldJail && !newJail) {
-        console.log(`🔓 ${newMember.user.tag} đã hết Tù.`);
-        await restoreRoles(newMember);
+        if (oldJail && !newJail) {
+
+            console.log(
+                `🔓 ${newMember.user.tag} đã hết Tù.`
+            );
+
+            await restoreRoles(
+                newMember
+            );
+        }
     }
-});
+);
+
+// ===============================
+// BOT ONLINE
+// ===============================
 
 client.once("ready", () => {
+
     console.log("================================");
     console.log(`🤖 Bot: ${client.user.tag}`);
     console.log("🤖 TB ManagerBot đã online.");
     console.log(`🏠 GUILD_ID: ${GUILD_ID}`);
     console.log(`🎧 CHANNEL_ID: ${CHANNEL_ID}`);
     console.log(`🔒 JAIL_ROLE_ID: ${JAIL_ROLE_ID}`);
-    console.log(`📢 JAIL_LOG_CHANNEL_ID: ${JAIL_LOG_CHANNEL_ID}`);
+    console.log(
+        `📢 JAIL_LOG_CHANNEL_ID: ${JAIL_LOG_CHANNEL_ID}`
+    );
     console.log("================================");
 
+    // Vào phòng thoại
     joinRoom();
 });
 
+// ===============================
+// DISCORD ERROR
+// ===============================
+
 client.on("error", error => {
-    console.error("❌ Discord Error:", error);
+    console.error(
+        "❌ Discord Error:",
+        error
+    );
 });
 
-process.on("unhandledRejection", error => {
-    console.error("❌ Unhandled Rejection:", error);
-});
+// ===============================
+// UNHANDLED ERROR
+// ===============================
 
-process.on("uncaughtException", error => {
-    console.error("❌ Uncaught Exception:", error);
-});
+process.on(
+    "unhandledRejection",
+    error => {
+        console.error(
+            "❌ Unhandled Rejection:",
+            error
+        );
+    }
+);
+
+process.on(
+    "uncaughtException",
+    error => {
+        console.error(
+            "❌ Uncaught Exception:",
+            error
+        );
+    }
+);
+
+// ===============================
+// LOGIN
+// ===============================
 
 client.login(TOKEN);
