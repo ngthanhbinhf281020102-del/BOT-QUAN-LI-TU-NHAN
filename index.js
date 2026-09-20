@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS saved_roles (
     created_at INTEGER NOT NULL,
     PRIMARY KEY (guild_id, user_id)
 )`).run();
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
