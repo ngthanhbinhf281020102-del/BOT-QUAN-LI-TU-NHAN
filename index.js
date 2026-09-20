@@ -1,8 +1,13 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const {
+    Client,
+    GatewayIntentBits
+} = require("discord.js");
+
 const {
     joinVoiceChannel,
     VoiceConnectionStatus
 } = require("@discordjs/voice");
+
 const Database = require("better-sqlite3");
 
 // ================================
@@ -70,26 +75,36 @@ let connection = null;
 let reconnectTimer = null;
 
 function joinRoom() {
-    const guild = client.guilds.cache.get(GUILD_ID);
+
+    const guild =
+        client.guilds.cache.get(GUILD_ID);
 
     if (!guild) {
-        console.log("❌ Không tìm thấy server.");
+        console.log(
+            "❌ Không tìm thấy server."
+        );
         return;
     }
 
-    const channel = guild.channels.cache.get(CHANNEL_ID);
+    const channel =
+        guild.channels.cache.get(CHANNEL_ID);
 
     if (!channel) {
-        console.log("❌ Không tìm thấy phòng thoại.");
+        console.log(
+            "❌ Không tìm thấy phòng thoại."
+        );
         return;
     }
 
     if (!channel.isVoiceBased()) {
-        console.log("❌ CHANNEL_ID không phải phòng thoại.");
+        console.log(
+            "❌ CHANNEL_ID không phải phòng thoại."
+        );
         return;
     }
 
     if (connection) {
+
         try {
             connection.destroy();
         } catch {}
@@ -105,24 +120,48 @@ function joinRoom() {
         selfMute: false
     });
 
-    console.log(`🎧 Đã vào phòng thoại: ${channel.name}`);
+    console.log(
+        `🎧 Đã vào phòng thoại: ${channel.name}`
+    );
 
-    connection.on(VoiceConnectionStatus.Ready, () => {
-        console.log("✅ Voice đã sẵn sàng.");
-    });
+    connection.on(
+        VoiceConnectionStatus.Ready,
+        () => {
 
-    connection.on(VoiceConnectionStatus.Disconnected, () => {
-        console.log("⚠️ Mất kết nối voice.");
+            console.log(
+                "✅ Voice đã sẵn sàng."
+            );
 
-        if (reconnectTimer) {
-            clearTimeout(reconnectTimer);
         }
+    );
 
-        reconnectTimer = setTimeout(() => {
-            console.log("🔄 Đang kết nối lại voice...");
-            joinRoom();
-        }, 5000);
-    });
+    connection.on(
+        VoiceConnectionStatus.Disconnected,
+        () => {
+
+            console.log(
+                "⚠️ Mất kết nối voice."
+            );
+
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+            }
+
+            reconnectTimer = setTimeout(
+                () => {
+
+                    console.log(
+                        "🔄 Đang kết nối lại voice..."
+                    );
+
+                    joinRoom();
+
+                },
+                5000
+            );
+
+        }
+    );
 }
 
 // ================================
@@ -130,12 +169,14 @@ function joinRoom() {
 // ================================
 
 function saveRoles(member) {
-    const roles = member.roles.cache
-        .filter(role =>
-            role.id !== member.guild.id &&
-            !role.managed
-        )
-        .map(role => role.id);
+
+    const roles =
+        member.roles.cache
+            .filter(role =>
+                role.id !== member.guild.id &&
+                !role.managed
+            )
+            .map(role => role.id);
 
     db.prepare(`
         INSERT INTO saved_roles
@@ -168,57 +209,78 @@ function saveRoles(member) {
 // ================================
 
 async function restoreRoles(member) {
-    const row = db.prepare(`
-        SELECT role_ids
-        FROM saved_roles
-        WHERE guild_id = ?
-        AND user_id = ?
-    `).get(
-        member.guild.id,
-        member.id
-    );
+
+    const row =
+        db.prepare(`
+            SELECT role_ids
+            FROM saved_roles
+            WHERE guild_id = ?
+            AND user_id = ?
+        `).get(
+            member.guild.id,
+            member.id
+        );
 
     if (!row) {
+
         console.log(
             `ℹ️ Không có role đã lưu cho ${member.user.tag}.`
         );
+
         return;
     }
 
     let roleIds;
 
     try {
-        roleIds = JSON.parse(row.role_ids);
+
+        roleIds =
+            JSON.parse(row.role_ids);
+
     } catch {
-        console.error("❌ Dữ liệu role bị lỗi.");
+
+        console.error(
+            "❌ Dữ liệu role bị lỗi."
+        );
+
         return;
     }
 
-    const botMember = member.guild.members.me;
+    const botMember =
+        member.guild.members.me;
 
     if (!botMember) {
+
         console.error(
             "❌ Không lấy được thông tin role của bot."
         );
+
         return;
     }
 
     const botPosition =
         botMember.roles.highest.position;
 
-    const validRoles = roleIds.filter(roleId => {
-        const role =
-            member.guild.roles.cache.get(roleId);
+    const validRoles =
+        roleIds.filter(roleId => {
 
-        return (
-            role &&
-            !role.managed &&
-            role.position < botPosition
-        );
-    });
+            const role =
+                member.guild.roles.cache.get(
+                    roleId
+                );
+
+            return (
+                role &&
+                !role.managed &&
+                role.position < botPosition
+            );
+
+        });
 
     if (validRoles.length > 0) {
+
         try {
+
             await member.roles.add(
                 validRoles,
                 "TB ManagerBot: khôi phục role sau khi hết Tù"
@@ -227,16 +289,22 @@ async function restoreRoles(member) {
             console.log(
                 `♻️ Đã khôi phục ${validRoles.length} role cho ${member.user.tag}.`
             );
+
         } catch (error) {
+
             console.error(
                 "❌ Lỗi khôi phục role:",
                 error.message
             );
+
         }
+
     } else {
+
         console.log(
             `ℹ️ Không có role hợp lệ để khôi phục cho ${member.user.tag}.`
         );
+
     }
 
     db.prepare(`
@@ -250,30 +318,73 @@ async function restoreRoles(member) {
 }
 
 // ================================
+// CHỐNG THÔNG BÁO TÙ TRÙNG
+// ================================
+
+const jailNotificationCooldown =
+    new Set();
+
+// ================================
 // THÔNG BÁO VÀO TÙ
 // ================================
 
 async function sendJailNotification(member) {
+
+    // Nếu người này vừa được thông báo
+    // thì bỏ qua thông báo trùng trong 2 giây
+    if (
+        jailNotificationCooldown.has(
+            member.id
+        )
+    ) {
+
+        console.log(
+            `⚠️ Bỏ qua thông báo Tù trùng cho ${member.user.tag}.`
+        );
+
+        return;
+    }
+
+    jailNotificationCooldown.add(
+        member.id
+    );
+
+    setTimeout(
+        () => {
+
+            jailNotificationCooldown.delete(
+                member.id
+            );
+
+        },
+        2000
+    );
+
     const channel =
         member.guild.channels.cache.get(
             JAIL_LOG_CHANNEL_ID
         );
 
     if (!channel) {
+
         console.log(
             "❌ Không tìm thấy kênh thông báo Tù."
         );
+
         return;
     }
 
     if (!channel.isTextBased()) {
+
         console.log(
             "❌ JAIL_LOG_CHANNEL_ID không phải kênh văn bản."
         );
+
         return;
     }
 
     try {
+
         await channel.send(
 `╔══════════════════════╗
    📢 **THÔNG BÁO**   
@@ -290,11 +401,14 @@ async function sendJailNotification(member) {
         console.log(
             `📢 Đã thông báo Tù cho ${member.user.tag}.`
         );
+
     } catch (error) {
+
         console.error(
             "❌ Lỗi gửi thông báo:",
             error.message
         );
+
     }
 }
 
@@ -307,30 +421,40 @@ client.on(
     async (oldMember, newMember) => {
 
         const oldJail =
-            oldMember.roles.cache.has(JAIL_ROLE_ID);
+            oldMember.roles.cache.has(
+                JAIL_ROLE_ID
+            );
 
         const newJail =
-            newMember.roles.cache.has(JAIL_ROLE_ID);
+            newMember.roles.cache.has(
+                JAIL_ROLE_ID
+            );
 
         // ==========================
         // VÀO TÙ
         // ==========================
 
-        if (!oldJail && newJail) {
+        if (
+            !oldJail &&
+            newJail
+        ) {
 
             console.log(
                 `🔒 ${newMember.user.tag} đã vào Tù.`
             );
 
+            // Lưu role cũ
             saveRoles(oldMember);
 
             const botMember =
                 newMember.guild.members.me;
 
             if (!botMember) {
+
                 console.error(
                     "❌ Không lấy được thông tin role của bot."
                 );
+
                 return;
             }
 
@@ -338,16 +462,20 @@ client.on(
                 botMember.roles.highest.position;
 
             const rolesToRemove =
-                newMember.roles.cache.filter(role =>
-                    role.id !== newMember.guild.id &&
-                    role.id !== JAIL_ROLE_ID &&
-                    !role.managed &&
-                    role.position < botPosition
+                newMember.roles.cache.filter(
+                    role =>
+                        role.id !== newMember.guild.id &&
+                        role.id !== JAIL_ROLE_ID &&
+                        !role.managed &&
+                        role.position < botPosition
                 );
 
-            if (rolesToRemove.size > 0) {
+            if (
+                rolesToRemove.size > 0
+            ) {
 
                 try {
+
                     await newMember.roles.remove(
                         rolesToRemove,
                         "TB ManagerBot: đưa thành viên vào Tù"
@@ -358,13 +486,16 @@ client.on(
                     );
 
                 } catch (error) {
+
                     console.error(
                         "❌ Lỗi xóa role:",
                         error.message
                     );
+
                 }
             }
 
+            // Gửi thông báo
             await sendJailNotification(
                 newMember
             );
@@ -374,72 +505,10 @@ client.on(
         // RA TÙ
         // ==========================
 
-        if (oldJail && !newJail) {
+        if (
+            oldJail &&
+            !newJail
+        ) {
 
             console.log(
-                `🔓 ${newMember.user.tag} đã hết Tù.`
-            );
-
-            await restoreRoles(
-                newMember
-            );
-        }
-    }
-);
-
-// ================================
-// BOT ONLINE
-// ================================
-
-client.once("ready", () => {
-
-    console.log("================================");
-    console.log(`🤖 Bot: ${client.user.tag}`);
-    console.log("🤖 TB ManagerBot đã online.");
-    console.log(`🏠 GUILD_ID: ${GUILD_ID}`);
-    console.log(`🎧 CHANNEL_ID: ${CHANNEL_ID}`);
-    console.log(`🔒 JAIL_ROLE_ID: ${JAIL_ROLE_ID}`);
-    console.log(
-        `📢 JAIL_LOG_CHANNEL_ID: ${JAIL_LOG_CHANNEL_ID}`
-    );
-    console.log("================================");
-
-    joinRoom();
-});
-
-// ================================
-// ERROR
-// ================================
-
-client.on("error", error => {
-    console.error(
-        "❌ Discord Error:",
-        error
-    );
-});
-
-process.on(
-    "unhandledRejection",
-    error => {
-        console.error(
-            "❌ Unhandled Rejection:",
-            error
-        );
-    }
-);
-
-process.on(
-    "uncaughtException",
-    error => {
-        console.error(
-            "❌ Uncaught Exception:",
-            error
-        );
-    }
-);
-
-// ================================
-// LOGIN
-// ================================
-
-client.login(TOKEN);
+                `
